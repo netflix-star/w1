@@ -1,0 +1,3 @@
+import {readFile,readdir} from 'node:fs/promises';
+import {pool,transaction} from './db';
+try{await pool.query('CREATE TABLE IF NOT EXISTS schema_migrations(version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');for(const file of (await readdir('server/migrations')).filter(f=>f.endsWith('.sql')).sort()){const version=file.slice(0,-4);await transaction(async db=>{await db.query('SELECT pg_advisory_xact_lock(947152)');if(!(await db.query('SELECT 1 FROM schema_migrations WHERE version=$1',[version])).rowCount)await db.query(await readFile(`server/migrations/${file}`,'utf8'));});}console.log('Database migrations applied.');}finally{await pool.end();}

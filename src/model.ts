@@ -1,0 +1,24 @@
+import * as THREE from 'three';
+import {GLTFLoader,type GLTF} from 'three/addons/loaders/GLTFLoader.js';
+import type {Project,MaterialOverride} from './project';
+import {defaults,resolve,type Selection} from './domain';
+const originals=new WeakMap<THREE.Object3D,{position:THREE.Vector3;scale:THREE.Vector3;visible:boolean}>();
+const materialOriginals=new WeakMap<THREE.Material,MaterialOverride>();
+function physical(source:THREE.Material){if(source instanceof THREE.MeshPhysicalMaterial)return source.clone();const next=new THREE.MeshPhysicalMaterial();if(source instanceof THREE.MeshStandardMaterial)THREE.MeshStandardMaterial.prototype.copy.call(next,source);else if(source instanceof THREE.MeshBasicMaterial){next.color.copy(source.color);next.map=source.map;next.alphaMap=source.alphaMap;next.transparent=source.transparent;next.opacity=source.opacity;next.side=source.side;next.name=source.name;}next.userData={...source.userData};return next;}
+function setMaterial(m:THREE.MeshPhysicalMaterial,edit:MaterialOverride){const compile=(m.clearcoat>0)!==(edit.clearcoat>0);m.color.set(edit.color);m.metalness=edit.metallic;m.roughness=edit.roughness;m.clearcoat=edit.clearcoat;if(edit.clearcoatRoughness!==undefined)m.clearcoatRoughness=edit.clearcoatRoughness;if(edit.transmission!==undefined){if((m.transmission>0)!==(edit.transmission>0))m.needsUpdate=true;m.transmission=edit.transmission;}if(edit.ior!==undefined)m.ior=edit.ior;if(compile)m.needsUpdate=true;}
+export async function parseModel(source:ArrayBuffer):Promise<GLTF>{
+ const model=await new GLTFLoader().parseAsync(source.slice(0),'');const replaced=new Set<THREE.Material>();
+ for(const scene of model.scenes)scene.traverse(object=>{
+  const association=model.parser.associations.get(object);if(association?.nodes!==undefined)object.userData.platformNodeId=`node_${association.nodes}`;
+  originals.set(object,{position:object.position.clone(),scale:object.scale.clone(),visible:object.visible});
+  if(object instanceof THREE.Mesh){const materials=Array.isArray(object.material)?object.material:[object.material];const changed=materials.map(m=>{const ref=model.parser.associations.get(m),next=physical(m);if(ref?.materials!==undefined)next.userData.platformMaterialId=`material_${ref.materials}`;materialOriginals.set(next,{color:'#'+next.color.getHexString(),metallic:next.metalness,roughness:next.roughness,clearcoat:next.clearcoat,clearcoatRoughness:next.clearcoatRoughness,transmission:next.transmission,ior:next.ior});replaced.add(m);return next;});object.material=Array.isArray(object.material)?changed:changed[0];}
+ });replaced.forEach(m=>m.dispose());return model;
+}
+export function applyMaterials(model:GLTF,project:Project,state:Selection=defaults(project)){
+ model.scene.traverse(o=>{const initial=originals.get(o);if(initial){o.position.copy(initial.position);o.scale.copy(initial.scale);o.visible=initial.visible;}if(o instanceof THREE.Mesh)for(const m of Array.isArray(o.material)?o.material:[o.material]){const initialMaterial=materialOriginals.get(m);if(m instanceof THREE.MeshPhysicalMaterial&&initialMaterial)setMaterial(m,{...initialMaterial,...project.materials[m.userData.platformMaterialId]});}});
+ let resolved;try{resolved=resolve(project,state);}catch{return;}const nodes=new Map<string,THREE.Object3D>();model.scene.traverse(o=>{if(o.userData.platformNodeId)nodes.set(o.userData.platformNodeId,o);});
+ // Geometry variants are existing authored nodes, not uploaded geometry replacements.
+ for(const option of project.options.filter(o=>o.kind==='geometry'))for(const id of option.targets){const node=nodes.get(id);if(node)node.visible=false;}
+ for(const option of resolved.options)for(const id of option.targets){const node=nodes.get(id);if(!node)continue;if(option.kind==='material'&&option.material)node.traverse(o=>{if(o instanceof THREE.Mesh)for(const m of Array.isArray(o.material)?o.material:[o.material])if(m instanceof THREE.MeshPhysicalMaterial)setMaterial(m,option.material!);});if(option.kind==='visibility')node.visible=option.visible??true;if(option.kind==='geometry')node.visible=true;if(option.kind==='transform'){if(option.translation)node.position.fromArray(option.translation);if(option.scale)node.scale.fromArray(option.scale);}}
+}
+export function disposeModel(model:GLTF){const geometries=new Set<THREE.BufferGeometry>(),materials=new Set<THREE.Material>(),textures=new Set<THREE.Texture>();for(const scene of model.scenes)scene.traverse(o=>{if(o instanceof THREE.Mesh){geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materials.add(m);for(const value of Object.values(m))if(value instanceof THREE.Texture)textures.add(value);}}});textures.forEach(t=>{const image=t.source.data;if(typeof ImageBitmap!=='undefined'&&image instanceof ImageBitmap)image.close();t.dispose();});materials.forEach(m=>m.dispose());geometries.forEach(g=>g.dispose());}

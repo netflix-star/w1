@@ -1,0 +1,48 @@
+{
+  "name": "configurator-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && tsc -p tsconfig.server.json && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "services": "node scripts/local-services.mjs",
+    "db:migrate": "tsx server/migrate.ts",
+    "dev:api": "tsx watch server/main.ts",
+    "start:api": "tsx server/main.ts",
+    "typecheck:server": "tsc -p tsconfig.server.json",
+    "db:backup": "node scripts/backup.mjs",
+    "services:s3": "node scripts/local-services.mjs --s3-test",
+    "db:bootstrap": "tsx server/bootstrap.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1147.0",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.1",
+    "gltf-validator": "^2.0.0-dev.3.10",
+    "helmet": "^8.3.0",
+    "pg": "^8.23.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sharp": "^0.35.5",
+    "three": "^0.180.0",
+    "zod": "^4.6.5",
+    "tsx": "^4.23.15"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.4",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.180.0",
+    "@vitejs/plugin-react": "^4.4.0",
+    "typescript": "^5.8.0",
+    "vite": "^6.3.0",
+    "vitest": "^3.2.0"
+  }
+}

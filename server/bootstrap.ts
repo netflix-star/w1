@@ -1,0 +1,5 @@
+import {randomUUID} from 'node:crypto';
+import {pool,transaction} from './db';
+import {passwordHash} from './auth';
+import {z} from 'zod';
+try{const email=z.string().email().parse(process.env.BOOTSTRAP_EMAIL).toLowerCase(),password=z.string().min(16).max(128).parse(process.env.BOOTSTRAP_PASSWORD),hash=await passwordHash(password);await transaction(async db=>{await db.query('SELECT pg_advisory_xact_lock(947154)');if((await db.query('SELECT 1 FROM users LIMIT 1')).rowCount)throw new Error('Bootstrap is only available for an empty installation.');const user=randomUUID(),tenant=randomUUID(),workspace=randomUUID();await db.query('INSERT INTO users(id,email,password_hash) VALUES($1,$2,$3)',[user,email,hash]);await db.query('INSERT INTO tenants(id,name) VALUES($1,$2)',[tenant,'Organization']);await db.query('INSERT INTO workspaces(id,tenant_id,name) VALUES($1,$2,$3)',[workspace,tenant,'Studio workspace']);await db.query("INSERT INTO memberships(user_id,workspace_id,role) VALUES($1,$2,'owner')",[user,workspace]);});console.log('Initial workspace owner created.');}finally{await pool.end();}

@@ -1,0 +1,3 @@
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+mkdirSync('.data',{recursive:true});const result=spawnSync('docker',['exec','forma-postgres','pg_dump','-U','forma','-d','forma','--no-owner','--no-privileges'],{maxBuffer:128*1024*1024});if(result.status!==0)throw new Error('PostgreSQL backup failed; the prior backup was preserved.');writeFileSync('.data/postgres-snapshot.sql.tmp',result.stdout,{mode:0o600});const {renameSync}=await import('node:fs');renameSync('.data/postgres-snapshot.sql.tmp','.data/postgres-snapshot.sql');console.log('Local database snapshot saved under ignored .data/. Original local assets remain in .data/assets/.');
